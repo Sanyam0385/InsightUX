@@ -2,6 +2,9 @@
 const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
 
+// Ignore certificate/SSL errors to bypass SSL handshake blocks on school or proxy networks
+app.commandLine.appendSwitch('ignore-certificate-errors');
+
 function createWindow() {
   // Disable CSP to allow injecting scripts and loading resources on external domains
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

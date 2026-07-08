@@ -18,6 +18,8 @@ sessions/
 # Node / Electron dependencies and builds
 MY_WEBGazer/node_modules/
 MY_WEBGazer/dist/
+MY_WEBGazer/dist.zip
+*.zip
 npm-debug.log*
 
 # System & Editor files

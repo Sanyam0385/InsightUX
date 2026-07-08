@@ -188,6 +188,7 @@ webview.addEventListener('page-title-updated', (e) => {
 // ─── Gaze & Mouse Tracking Process Control & Logging ───
 let pyProcess = null;
 let isTracking = false;
+let isPolling = false;
 let logsInterval = null;
 let domLogPath = '';
 let mouseLogPath = '';
@@ -314,142 +315,148 @@ function startTracking() {
   // Start periodic DOM and Mouse data retrieval loop (runs every 300ms)
   logsInterval = setInterval(async () => {
     if (!isTracking) return;
+    if (isPolling) return;
+    isPolling = true;
 
-    if (currentMode === 'browser') {
-      // 1. Get DOM elements visibility logs
-      try {
-        const rawAOIs = await webview.executeJavaScript("typeof window.insightuxAOIs === 'function' ? window.insightuxAOIs() : null");
-        if (rawAOIs) {
-          const rec = JSON.parse(rawAOIs);
-          rec.type = "dom";
-          rec.t = (Date.now() / 1000);
+    try {
+      if (currentMode === 'browser') {
+        // 1. Get DOM elements visibility logs
+        try {
+          const rawAOIs = await webview.executeJavaScript("typeof window.insightuxAOIs === 'function' ? window.insightuxAOIs() : null");
+          if (rawAOIs) {
+            const rec = JSON.parse(rawAOIs);
+            rec.type = "dom";
+            rec.t = (Date.now() / 1000);
+            fs.appendFileSync(domLogPath, JSON.stringify(rec) + '\n');
+          }
+        } catch (e) {
+          // Ignored if webview hasn't loaded window.insightuxAOIs yet
+        }
+
+        // 2. Get Mouse details log (clicks, dwells, trails)
+        try {
+          const rawMouse = await webview.executeJavaScript("typeof window.insightuxMouseData === 'function' ? window.insightuxMouseData() : null");
+          if (rawMouse) {
+            const mouseData = JSON.parse(rawMouse);
+            const tNow = (Date.now() / 1000);
+            
+            // Log clicks
+            for (const click of mouseData.clicks || []) {
+              click.type = "click";
+              click.t = tNow;
+              fs.appendFileSync(mouseLogPath, JSON.stringify(click) + '\n');
+            }
+            
+            // Log mouse dwells
+            for (const dwell of mouseData.dwells || []) {
+              dwell.type = "mouse_dwell";
+              dwell.t = tNow;
+              fs.appendFileSync(mouseLogPath, JSON.stringify(dwell) + '\n');
+            }
+            
+            // Log gaze dwells
+            for (const gazeDwell of mouseData.gazeDwells || []) {
+              gazeDwell.type = "gaze_dwell";
+              gazeDwell.t = tNow;
+              fs.appendFileSync(mouseLogPath, JSON.stringify(gazeDwell) + '\n');
+            }
+
+            // Log mouse trails
+            if (mouseData.trail && mouseData.trail.length > 0) {
+              fs.appendFileSync(mouseLogPath, JSON.stringify({
+                type: "mouse_trail",
+                t: tNow,
+                points: mouseData.trail
+              }) + '\n');
+            }
+
+            // Log gaze trails
+            if (mouseData.gazeTrail && mouseData.gazeTrail.length > 0) {
+              fs.appendFileSync(mouseLogPath, JSON.stringify({
+                type: "gaze_trail",
+                t: tNow,
+                points: mouseData.gazeTrail
+              }) + '\n');
+            }
+          }
+        } catch (e) {
+          // Ignored
+        }
+      } else {
+        // ─── Poster Mode Local Telemetry Log Writer ───
+        const tNow = (Date.now() / 1000);
+
+        // 1. Log layout boxes (analogous to HTML DOM)
+        if (posterElements.length > 0) {
+          const rec = {
+            url: "poster://" + path.basename(posterPath),
+            scrollX: 0,
+            scrollY: 0,
+            viewport: { w: posterCanvas.width, h: posterCanvas.height },
+            page: { w: posterCanvas.width, h: posterCanvas.height },
+            aois: posterElements.map(el => {
+              const [nx, ny, nw, nh] = el.box;
+              return {
+                label: el.label,
+                x: Math.round(nx * posterCanvas.width),
+                y: Math.round(ny * posterCanvas.height),
+                w: Math.round(nw * posterCanvas.width),
+                h: Math.round(nh * posterCanvas.height),
+                sticky: true
+              };
+            }),
+            type: "dom",
+            t: tNow
+          };
           fs.appendFileSync(domLogPath, JSON.stringify(rec) + '\n');
         }
-      } catch (e) {
-        // Ignored if webview hasn't loaded window.insightuxAOIs yet
-      }
 
-      // 2. Get Mouse details log (clicks, dwells, trails)
-      try {
-        const rawMouse = await webview.executeJavaScript("typeof window.insightuxMouseData === 'function' ? window.insightuxMouseData() : null");
-        if (rawMouse) {
-          const mouseData = JSON.parse(rawMouse);
-          const tNow = (Date.now() / 1000);
-          
-          // Log clicks
-          for (const click of mouseData.clicks || []) {
-            click.type = "click";
-            click.t = tNow;
-            fs.appendFileSync(mouseLogPath, JSON.stringify(click) + '\n');
-          }
-          
-          // Log mouse dwells
-          for (const dwell of mouseData.dwells || []) {
-            dwell.type = "mouse_dwell";
-            dwell.t = tNow;
-            fs.appendFileSync(mouseLogPath, JSON.stringify(dwell) + '\n');
-          }
-          
-          // Log gaze dwells
-          for (const gazeDwell of mouseData.gazeDwells || []) {
-            gazeDwell.type = "gaze_dwell";
-            gazeDwell.t = tNow;
-            fs.appendFileSync(mouseLogPath, JSON.stringify(gazeDwell) + '\n');
-          }
-
-          // Log mouse trails
-          if (mouseData.trail && mouseData.trail.length > 0) {
-            fs.appendFileSync(mouseLogPath, JSON.stringify({
-              type: "mouse_trail",
-              t: tNow,
-              points: mouseData.trail
-            }) + '\n');
-          }
-
-          // Log gaze trails
-          if (mouseData.gazeTrail && mouseData.gazeTrail.length > 0) {
-            fs.appendFileSync(mouseLogPath, JSON.stringify({
-              type: "gaze_trail",
-              t: tNow,
-              points: mouseData.gazeTrail
-            }) + '\n');
-          }
+        // 2. Log click events
+        for (const click of posterClicks) {
+          click.type = "click";
+          click.t = tNow;
+          fs.appendFileSync(mouseLogPath, JSON.stringify(click) + '\n');
         }
-      } catch (e) {
-        // Ignored
-      }
-    } else {
-      // ─── Poster Mode Local Telemetry Log Writer ───
-      const tNow = (Date.now() / 1000);
+        posterClicks = [];
 
-      // 1. Log layout boxes (analogous to HTML DOM)
-      if (posterElements.length > 0) {
-        const rec = {
-          url: "poster://" + path.basename(posterPath),
-          scrollX: 0,
-          scrollY: 0,
-          viewport: { w: posterCanvas.width, h: posterCanvas.height },
-          page: { w: posterCanvas.width, h: posterCanvas.height },
-          aois: posterElements.map(el => {
-            const [nx, ny, nw, nh] = el.box;
-            return {
-              label: el.label,
-              x: Math.round(nx * posterCanvas.width),
-              y: Math.round(ny * posterCanvas.height),
-              w: Math.round(nw * posterCanvas.width),
-              h: Math.round(nh * posterCanvas.height),
-              sticky: true
-            };
-          }),
-          type: "dom",
-          t: tNow
-        };
-        fs.appendFileSync(domLogPath, JSON.stringify(rec) + '\n');
-      }
+        // 3. Log mouse dwells
+        for (const dwell of posterMouseDwellBuffer) {
+          dwell.type = "mouse_dwell";
+          dwell.t = tNow;
+          fs.appendFileSync(mouseLogPath, JSON.stringify(dwell) + '\n');
+        }
+        posterMouseDwellBuffer = [];
 
-      // 2. Log click events
-      for (const click of posterClicks) {
-        click.type = "click";
-        click.t = tNow;
-        fs.appendFileSync(mouseLogPath, JSON.stringify(click) + '\n');
-      }
-      posterClicks = [];
+        // 4. Log gaze dwells
+        for (const gazeDwell of posterGazeDwellBuffer) {
+          gazeDwell.type = "gaze_dwell";
+          gazeDwell.t = tNow;
+          fs.appendFileSync(mouseLogPath, JSON.stringify(gazeDwell) + '\n');
+        }
+        posterGazeDwellBuffer = [];
 
-      // 3. Log mouse dwells
-      for (const dwell of posterMouseDwellBuffer) {
-        dwell.type = "mouse_dwell";
-        dwell.t = tNow;
-        fs.appendFileSync(mouseLogPath, JSON.stringify(dwell) + '\n');
-      }
-      posterMouseDwellBuffer = [];
+        // 5. Log mouse trails
+        if (posterMouseTrailBuffer.length > 0) {
+          fs.appendFileSync(mouseLogPath, JSON.stringify({
+            type: "mouse_trail",
+            t: tNow,
+            points: posterMouseTrailBuffer
+          }) + '\n');
+          posterMouseTrailBuffer = [];
+        }
 
-      // 4. Log gaze dwells
-      for (const gazeDwell of posterGazeDwellBuffer) {
-        gazeDwell.type = "gaze_dwell";
-        gazeDwell.t = tNow;
-        fs.appendFileSync(mouseLogPath, JSON.stringify(gazeDwell) + '\n');
+        // 6. Log gaze trails
+        if (posterGazeTrailBuffer.length > 0) {
+          fs.appendFileSync(mouseLogPath, JSON.stringify({
+            type: "gaze_trail",
+            t: tNow,
+            points: posterGazeTrailBuffer
+          }) + '\n');
+          posterGazeTrailBuffer = [];
+        }
       }
-      posterGazeDwellBuffer = [];
-
-      // 5. Log mouse trails
-      if (posterMouseTrailBuffer.length > 0) {
-        fs.appendFileSync(mouseLogPath, JSON.stringify({
-          type: "mouse_trail",
-          t: tNow,
-          points: posterMouseTrailBuffer
-        }) + '\n');
-        posterMouseTrailBuffer = [];
-      }
-
-      // 6. Log gaze trails
-      if (posterGazeTrailBuffer.length > 0) {
-        fs.appendFileSync(mouseLogPath, JSON.stringify({
-          type: "gaze_trail",
-          t: tNow,
-          points: posterGazeTrailBuffer
-        }) + '\n');
-        posterGazeTrailBuffer = [];
-      }
+    } finally {
+      isPolling = false;
     }
   }, 300);
 }
