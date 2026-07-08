@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>InsightUX Gaze & Mouse Tracker</title>
+  <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1>InsightUX Tracker</h1>
+    
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status">
+      <span id="statusDot" class="status-dot disconnected"></span>
+      <span id="statusText" class="status-text">Gaze Engine: Offline</span>
+    </div>
+    
+    <div class="controls">
+      <button id="startBtn">Start Tracking</button>
+      <button id="stopBtn">Stop Tracking</button>
+      <button id="clearBtn">Clear Data</button>
+      <button id="heatmapBtn">Toggle Heatmap</button>
+      <button id="logsBtn">View Click Logs</button>
+    </div>
+
+    <!-- Settings Section -->
+    <div class="settings-panel">
+      <h3>Visualization Settings</h3>
+      <div class="setting-item">
+        <label for="heatmapTypeSelect">Heatmap Mode:</label>
+        <select id="heatmapTypeSelect">
+          <option value="combined">Combined (Gaze + Mouse)</option>
+          <option value="gaze">Gaze Only</option>
+          <option value="mouse">Mouse Only</option>
+        </select>
+      </div>
+      <div class="setting-item checkbox-item">
+        <label for="gazeCursorToggle">Show Gaze Cursor:</label>
+        <input type="checkbox" id="gazeCursorToggle" checked>
+      </div>
+    </div>
+
+    <div id="timer" style="font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #333;">Session Time: 00:00</div>
+    <div id="status">Status: Idle</div>
+    
+    <!-- Data Counters -->
+    <div class="counters">
+      <span id="mouseCounter">Mouse: 0 pts</span>
+      <span id="gazeCounter">Gaze: 0 pts</span>
+    </div>
+
+    <!-- Top Interests Tabs/Container -->
+    <div class="interests-section">
+      <div class="tabs-header">
+        <button id="tabGazeBtn" class="tab-btn active">Gaze Interests</button>
+        <button id="tabMouseBtn" class="tab-btn">Mouse Interests</button>
+      </div>
+      
+      <div id="gazeInterests" class="tab-content active">
+        <div id="topGazeInterestHero" class="interest-hero" style="display:none;">
+          <div class="hero-label">Most Looked Element</div>
+          <div id="heroGazeElement" class="hero-element">-</div>
+          <div id="heroGazeTime" class="hero-time">0s</div>
+        </div>
+        <div id="gazeInterestsContainer" class="list-container" style="display:none;"></div>
+      </div>
+      
+      <div id="mouseInterests" class="tab-content">
+        <div id="topMouseInterestHero" class="interest-hero" style="display:none;">
+          <div class="hero-label">Most Hovered Element</div>
+          <div id="heroMouseElement" class="hero-element">-</div>
+          <div id="heroMouseTime" class="hero-time">0s</div>
+        </div>
+        <div id="mouseInterestsContainer" class="list-container" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div id="logContainer" style="display:none; margin-top: 10px; max-height: 200px; overflow-y: auto; font-size: 11px; border: 1px solid #ccc; padding: 5px; background: #fff;"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>

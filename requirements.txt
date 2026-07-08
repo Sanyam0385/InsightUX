@@ -1,0 +1,11 @@
+numpy==1.26.4
+opencv-python==4.11.0.86
+onnxruntime==1.27.0
+onnx==1.22.0
+scipy==1.17.1
+mediapipe==0.10.18
+torch==2.12.1
+torchvision==0.27.1
+pywebview==6.2.1
+websockets==16.0
+pyautogui==0.9.54

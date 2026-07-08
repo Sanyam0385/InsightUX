@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGazer Analysis Browser</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-nav: rgba(30, 41, 59, 0.7);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(99, 102, 241, 0.5);
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--bg-dark);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    /* Top Navigation Bar */
+    .nav-bar {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      background-color: var(--bg-nav);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      z-index: 10;
+    }
+
+    /* Nav Buttons */
+    .nav-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .nav-btn:active {
+      transform: translateY(1px);
+    }
+
+    .nav-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* Address Bar Input */
+    .address-container {
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+
+    .address-bar {
+      width: 100%;
+      height: 36px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 0 16px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .address-bar:focus {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--border-focus);
+    }
+
+    /* Tracking Status Badge */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #10b981;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    /* Webview Container */
+    .app-container {
+      display: flex;
+      flex-direction: row;
+      flex-grow: 1;
+      width: 100vw;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+    }
+
+    .webview-container {
+      flex-grow: 1;
+      height: 100%;
+      background-color: #ffffff;
+      position: relative;
+    }
+
+    #webview {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Sidebar Panel */
+    .sidebar-panel {
+      width: 280px;
+      height: 100%;
+      background-color: #1e293b;
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 20px;
+      box-shadow: -5px 0 20px rgba(0, 0, 0, 0.15);
+      z-index: 5;
+      transition: width 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .sidebar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar-section h3 {
+      margin: 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .track-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #fff;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .track-btn:hover {
+      background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    }
+
+    .track-btn:active {
+      transform: translateY(1px);
+    }
+
+    .track-btn.active {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .track-btn.active:hover {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+    }
+
+    .status-indicator-box {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .status-indicator-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-dot-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-dot-indicator.connected {
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .status-dot-indicator.disconnected {
+      background-color: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+    }
+
+    .camera-feedback-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+
+    /* Mode Tabs */
+    .mode-tabs {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 2px;
+      margin-left: 12px;
+      margin-right: 12px;
+    }
+
+    .mode-tab {
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 18px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .mode-tab.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    }
+
+    .mode-tab:hover:not(.active) {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    /* Poster Analyzer View */
+    #poster-view {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      z-index: 4;
+    }
+
+    #poster-upload-zone {
+      width: 80%;
+      max-width: 500px;
+      padding: 60px 20px;
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      text-align: center;
+      background: rgba(30, 41, 59, 0.3);
+      backdrop-filter: blur(10px);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    #poster-upload-zone:hover {
+      border-color: var(--accent);
+      background: rgba(30, 41, 59, 0.5);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.15);
+    }
+
+    #poster-upload-zone .upload-icon {
+      font-size: 48px;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    #poster-upload-zone h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    #poster-upload-zone p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    #poster-workspace {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    #poster-img-wrapper {
+      position: relative;
+      max-width: 100%;
+      max-height: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+
+    #poster-img {
+      max-width: 100%;
+      max-height: calc(100vh - 96px); /* Height minus navbar and some padding */
+      display: block;
+      object-fit: contain;
+    }
+
+    #poster-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto; /* Allow drawing/clicking on the canvas */
+      z-index: 2;
+    }
+
+    /* Poster Stats elements */
+    #poster-elements-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    #poster-elements-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+    }
+    
+    .poster-el-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    
+    .poster-el-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    
+    .poster-el-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+    
+    .poster-el-name {
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
+    
+    .poster-el-time {
+      font-weight: 700;
+      color: #ff2df0;
+    }
+    
+    .poster-progress-bg {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    
+    .poster-progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+      background: linear-gradient(90deg, #7B2FBE, #FF2DF0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header class="nav-bar">
+    <!-- Navigation Buttons -->
+    <button class="nav-btn" id="back-btn" title="Go back">
+      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    </button>
+    <button class="nav-btn" id="forward-btn" title="Go forward">
+      <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+    </button>
+    <button class="nav-btn" id="reload-btn" title="Reload page">
+      <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+    </button>
+    <button class="nav-btn" id="home-btn" title="Go home">
+      <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+    </button>
+
+    <!-- Mode Toggle Tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="mode-browser-btn">Web Browser</button>
+      <button class="mode-tab" id="mode-poster-btn">Poster Analyzer</button>
+    </div>
+
+    <!-- Address Bar -->
+    <div class="address-container">
+      <input type="text" class="address-bar" id="address-bar" placeholder="Enter URL or search term...">
+    </div>
+
+    <!-- Status Badge -->
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      <span>GAZE INJECTED</span>
+    </div>
+  </header>
+
+  <!-- Main App Layout (Webview + Sidebar Controls) -->
+  <div class="app-container">
+    <main class="webview-container">
+      <webview id="webview"></webview>
+
+      <!-- Poster Analyzer Interface -->
+      <div id="poster-view" style="display: none;">
+        <div id="poster-upload-zone">
+          <span class="upload-icon">📂</span>
+          <h2>Upload Poster Image</h2>
+          <p>Drag & drop or click to select a poster image</p>
+          <input type="file" id="poster-file-input" accept="image/*" style="display: none;">
+        </div>
+        <div id="poster-workspace" style="display: none;">
+          <div id="poster-img-wrapper">
+            <img id="poster-img" src="" alt="Poster Image">
+            <canvas id="poster-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="sidebar-panel" id="sidebar-panel">
+      <div class="sidebar-section">
+        <h3>Tracking Control</h3>
+        <button class="track-btn" id="start-track-btn">
+          <span class="track-icon">👁️</span>
+          <span class="track-text">Start Eye Tracking</span>
+        </button>
+        <div class="status-indicator-box">
+          <div class="status-indicator-row">
+            <span class="status-dot-indicator disconnected" id="gaze-engine-status-dot"></span>
+            <span class="status-text" id="gaze-engine-status-text">Gaze Engine: Offline</span>
+          </div>
+          <div class="status-indicator-row">
+            <span class="status-dot-indicator disconnected" id="tracking-status-dot"></span>
+            <span class="status-text" id="tracking-status-text">Tracking Status: Idle</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Poster Analysis Telemetry (shown only in Poster Mode) -->
+      <div class="sidebar-section" id="poster-stats-section" style="display: none;">
+        <h3>Poster Elements</h3>
+        <button class="track-btn" id="change-poster-btn" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: var(--text-main); margin-bottom: 12px; box-shadow: none;">
+          📂 Load New Poster
+        </button>
+        <div class="camera-feedback-card" style="margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Gaze Dwell:</span>
+            <span id="poster-gaze-lbl" style="font-weight: bold; color: #ff2df0;">-</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Mouse Hover:</span>
+            <span id="poster-mouse-lbl" style="font-weight: bold; color: #00BFFF;">-</span>
+          </div>
+        </div>
+        
+        <div id="poster-elements-list" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+          <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin: 20px 0;">No poster loaded yet.</p>
+        </div>
+      </div>
+      
+      <div class="sidebar-section" id="camera-feedback-section">
+        <h3>Camera Feedback</h3>
+        <div class="camera-feedback-card">
+          <p>Webcam feedback will appear in a separate window when tracking is active to help with posture and calibration.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Script to load renderer.js -->
+  <script src="renderer.js"></script>
+</body>
+</html>

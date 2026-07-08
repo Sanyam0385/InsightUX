@@ -1,0 +1,29 @@
+# Python virtual environments
+venv/
+venv_old/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+pyvenv.cfg
+pip-selfcheck.json
+
+# Local telemetry data and logs
+sessions/
+*.pkl
+
+# Node / Electron dependencies and builds
+MY_WEBGazer/node_modules/
+MY_WEBGazer/dist/
+npm-debug.log*
+
+# System & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.agents/
+*.mp4
