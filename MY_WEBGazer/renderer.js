@@ -328,7 +328,14 @@ function startTracking() {
   });
 
   pyProcess.stderr.on('data', (data) => {
-    console.error('[Python Error]:', data.toString());
+    const text = data.toString();
+    if (text.includes('Traceback') || text.includes('Error:') || text.includes('Exception') || text.includes('FileNotFoundError')) {
+      console.error('[Python Error]:', text);
+    } else if (text.includes('WARNING') || text.includes('W0000') || text.includes('W1234') || text.includes('W0709')) {
+      console.warn('[Python Warning]:', text);
+    } else {
+      console.log('[Python Log]:', text);
+    }
   });
 
   pyProcess.on('close', (code) => {
