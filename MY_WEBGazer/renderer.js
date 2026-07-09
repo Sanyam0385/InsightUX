@@ -10,6 +10,8 @@ const reloadBtn = document.getElementById('reload-btn');
 const homeBtn = document.getElementById('home-btn');
 
 const startTrackBtn = document.getElementById('start-track-btn');
+const calibrateBtn = document.getElementById('calibrate-btn');
+const validateBtn = document.getElementById('validate-btn');
 const gazeDot = document.getElementById('gaze-engine-status-dot');
 const gazeText = document.getElementById('gaze-engine-status-text');
 const trackDot = document.getElementById('tracking-status-dot');
@@ -66,6 +68,19 @@ class OneEuroFilter {
 
 const posterFilterX = new OneEuroFilter(0.35, 0.12);
 const posterFilterY = new OneEuroFilter(0.35, 0.12);
+
+function getBackendExePath() {
+  const unpackedPath = path.join(__dirname, 'app.asar.unpacked', 'python_backend', 'gaze_backend', 'gaze_backend.exe');
+  const unpackedPath2 = path.join(__dirname, '..', 'app.asar.unpacked', 'python_backend', 'gaze_backend', 'gaze_backend.exe');
+  const devPath = path.join(__dirname, 'python_backend', 'gaze_backend', 'gaze_backend.exe');
+  const devPath2 = path.join(__dirname, '..', 'dist', 'gaze_backend', 'gaze_backend.exe');
+
+  if (fs.existsSync(unpackedPath)) return unpackedPath;
+  if (fs.existsSync(unpackedPath2)) return unpackedPath2;
+  if (fs.existsSync(devPath)) return devPath;
+  if (fs.existsSync(devPath2)) return devPath2;
+  return null;
+}
 
 // ─── Poster Analyzer State Variables ───
 let currentMode = 'browser'; // 'browser' or 'poster'
@@ -250,41 +265,51 @@ function startTracking() {
     try { fs.unlinkSync(mouseLogPath); } catch(e) {}
   }
 
-  // Resolve Python executable path
-  let pythonPath = 'python'; // Fallback to system python
-  const localVenv = path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe');
-  
-  if (fs.existsSync(localVenv)) {
-    pythonPath = localVenv;
-  }
+  // ─── Resolve and Spawn Gaze Server (Binary vs. Python Script) ───
+  const exePath = getBackendExePath();
 
-  // Resolve Python script path (handling packaged app.asar.unpacked directory structure and local workspace paths)
-  let scriptPath = '';
-  const unpackedScriptPath = path.join(__dirname, 'app.asar.unpacked', 'python_backend', 'gaze_server.py');
-  const unpackedScriptPath2 = path.join(__dirname, '..', 'app.asar.unpacked', 'python_backend', 'gaze_server.py');
-  const devScriptPath = path.join(__dirname, 'python_backend', 'gaze_server.py');
-  const rootScriptPath = path.join(__dirname, '..', 'gaze_server.py');
-  
-  if (fs.existsSync(unpackedScriptPath)) {
-    scriptPath = unpackedScriptPath;
-  } else if (fs.existsSync(unpackedScriptPath2)) {
-    scriptPath = unpackedScriptPath2;
-  } else if (fs.existsSync(devScriptPath)) {
-    scriptPath = devScriptPath;
-  } else if (fs.existsSync(rootScriptPath)) {
-    scriptPath = rootScriptPath;
+  if (exePath) {
+    const exeDir = path.dirname(exePath);
+    console.log('[Electron Shell] Spawning Standalone Gaze Server (via gaze_backend.exe):');
+    console.log(' - Executable path:', exePath);
+    console.log(' - Working directory (CWD):', exeDir);
+    console.log(' - Session Log Output Directory:', sessionDir);
+
+    pyProcess = spawn(exePath, ['--track', sessionDir], { cwd: exeDir });
   } else {
-    scriptPath = rootScriptPath; // Fallback to root path
+    // Fallback: Resolve Python interpreter and script path
+    let pythonPath = 'python'; // Fallback to system python
+    const localVenv = path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe');
+    if (fs.existsSync(localVenv)) {
+      pythonPath = localVenv;
+    }
+
+    let scriptPath = '';
+    const unpackedScriptPath = path.join(__dirname, 'app.asar.unpacked', 'python_backend', 'gaze_server.py');
+    const unpackedScriptPath2 = path.join(__dirname, '..', 'app.asar.unpacked', 'python_backend', 'gaze_server.py');
+    const devScriptPath = path.join(__dirname, 'python_backend', 'gaze_server.py');
+    const rootScriptPath = path.join(__dirname, '..', 'gaze_server.py');
+    
+    if (fs.existsSync(unpackedScriptPath)) {
+      scriptPath = unpackedScriptPath;
+    } else if (fs.existsSync(unpackedScriptPath2)) {
+      scriptPath = unpackedScriptPath2;
+    } else if (fs.existsSync(devScriptPath)) {
+      scriptPath = devScriptPath;
+    } else if (fs.existsSync(rootScriptPath)) {
+      scriptPath = rootScriptPath;
+    } else {
+      scriptPath = rootScriptPath;
+    }
+
+    const scriptDir = path.dirname(scriptPath);
+    console.log('[Electron Shell] Executable binary not found. Falling back to Python interpreter:');
+    console.log(' - Python path:', pythonPath);
+    console.log(' - Script path:', scriptPath);
+    console.log(' - Working directory (CWD):', scriptDir);
+
+    pyProcess = spawn(pythonPath, ['-u', scriptPath, sessionDir], { cwd: scriptDir });
   }
-
-  const scriptDir = path.dirname(scriptPath);
-  console.log('[Electron Shell] Spawning Python Gaze Server:');
-  console.log(' - Python executable:', pythonPath);
-  console.log(' - Script path:', scriptPath);
-  console.log(' - Working directory (CWD):', scriptDir);
-  console.log(' - Session Log Output Directory:', sessionDir);
-
-  pyProcess = spawn(pythonPath, ['-u', scriptPath, sessionDir], { cwd: scriptDir });
 
   pyProcess.stdout.on('data', (data) => {
     const output = data.toString();
@@ -1162,6 +1187,81 @@ function resetUploadZone() {
 setupPosterMouseListeners();
 
 // ─── Click & Control Listeners ───
+
+function syncCalibrationFiles() {
+  const rootCal = path.join(__dirname, '..', 'calibration.pkl');
+  const rootBase = path.join(__dirname, '..', 'baseline_pose.pkl');
+  const destCal = path.join(__dirname, 'python_backend', 'gaze_backend', 'calibration.pkl');
+  const destBase = path.join(__dirname, 'python_backend', 'gaze_backend', 'baseline_pose.pkl');
+
+  if (fs.existsSync(rootCal)) {
+    try {
+      fs.copyFileSync(rootCal, destCal);
+      console.log('[Electron Shell] Synced calibration.pkl from workspace to python_backend');
+    } catch(e) {}
+  }
+  if (fs.existsSync(rootBase)) {
+    try {
+      fs.copyFileSync(rootBase, destBase);
+      console.log('[Electron Shell] Synced baseline_pose.pkl from workspace to python_backend');
+    } catch(e) {}
+  }
+}
+
+// When Calibrate Gaze is clicked
+calibrateBtn.addEventListener('click', () => {
+  const exePath = getBackendExePath();
+  const rootPython = path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe');
+  const rootCalScript = path.join(__dirname, '..', 'calibrate_FINAL_CURRENT.py');
+
+  // Visual feedback
+  calibrateBtn.classList.add('active');
+  calibrateBtn.querySelector('.track-text').textContent = 'Calibrating...';
+  
+  let calProcess;
+  if (exePath) {
+    console.log('[Electron Shell] Spawning standalone backend for calibration:', exePath);
+    calProcess = spawn(exePath, ['--calibrate'], { cwd: path.dirname(exePath) });
+  } else {
+    const pyExe = fs.existsSync(rootPython) ? rootPython : 'python';
+    console.log('[Electron Shell] Spawning python calibration script:', pyExe, rootCalScript);
+    calProcess = spawn(pyExe, [rootCalScript], { cwd: path.dirname(rootCalScript) });
+  }
+
+  calProcess.on('close', (code) => {
+    console.log('[Electron Shell] Calibration finished with code', code);
+    calibrateBtn.classList.remove('active');
+    calibrateBtn.querySelector('.track-text').textContent = 'Calibrate Gaze';
+    syncCalibrationFiles();
+  });
+});
+
+// When Validate Accuracy is clicked
+validateBtn.addEventListener('click', () => {
+  const exePath = getBackendExePath();
+  const rootPython = path.join(__dirname, '..', 'venv', 'Scripts', 'python.exe');
+  const rootValScript = path.join(__dirname, '..', 'validate_FINAL_CURRENT.py');
+
+  // Visual feedback
+  validateBtn.classList.add('active');
+  validateBtn.querySelector('.track-text').textContent = 'Validating...';
+
+  let valProcess;
+  if (exePath) {
+    console.log('[Electron Shell] Spawning standalone backend for validation:', exePath);
+    valProcess = spawn(exePath, ['--validate'], { cwd: path.dirname(exePath) });
+  } else {
+    const pyExe = fs.existsSync(rootPython) ? rootPython : 'python';
+    console.log('[Electron Shell] Spawning python validation script:', pyExe, rootValScript);
+    valProcess = spawn(pyExe, [rootValScript], { cwd: path.dirname(rootValScript) });
+  }
+
+  valProcess.on('close', (code) => {
+    console.log('[Electron Shell] Validation finished with code', code);
+    validateBtn.classList.remove('active');
+    validateBtn.querySelector('.track-text').textContent = 'Validate Accuracy';
+  });
+});
 
 startTrackBtn.addEventListener('click', () => {
   if (isTracking) {

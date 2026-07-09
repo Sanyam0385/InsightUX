@@ -29,3 +29,10 @@ Thumbs.db
 .idea/
 .agents/
 *.mp4
+
+# Compiled binaries and builds
+build/
+dist/
+*.spec
+MY_WEBGazer/python_backend/gaze_backend/
+MY_WEBGazer/python_backend/gaze_server/
