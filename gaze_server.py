@@ -77,10 +77,49 @@ def compensate_yaw(raw_yaw, head_yaw_deg):
     return raw_yaw - np.radians(head_yaw_deg) * HEAD_YAW_COMPENSATION
 
 # =============================================================================
+# ONE EURO FILTER (display/websocket smoothing only)
+# =============================================================================
+class OneEuroFilter:
+    def __init__(self, mincutoff=0.8, beta=0.4, dcutoff=1.0):
+        self.mincutoff = mincutoff
+        self.beta = beta
+        self.dcutoff = dcutoff
+        self.x_prev = None
+        self.dx_prev = 0.0
+        self.t_prev = None
+
+    @staticmethod
+    def _alpha(cutoff, dt):
+        tau = 1.0 / (2 * math.pi * cutoff)
+        return 1.0 / (1.0 + tau / dt)
+
+    def __call__(self, x, t):
+        if self.x_prev is None:
+            self.x_prev, self.t_prev = x, t
+            return x
+        dt = t - self.t_prev
+        if dt <= 0:
+            dt = 1e-3
+        self.t_prev = t
+        dx = (x - self.x_prev) / dt
+        edx = self._alpha(self.dcutoff, dt) * dx + (1 - self._alpha(self.dcutoff, dt)) * self.dx_prev
+        self.dx_prev = edx
+        cutoff = self.mincutoff + self.beta * abs(edx)
+        alpha = self._alpha(cutoff, dt)
+        x_filtered = alpha * x + (1 - alpha) * self.x_prev
+        self.x_prev = x_filtered
+        return x_filtered
+
+    def reset(self):
+        self.x_prev = None
+        self.dx_prev = 0.0
+        self.t_prev = None
+
+# =============================================================================
 # GAZE WEBSOCKET SERVER
 # =============================================================================
 class GazeWebSocketServer:
-    def __init__(self, host="localhost", port=8765):
+    def __init__(self, host="127.0.0.1", port=8765):
         self.host = host
         self.port = port
         self.connected = set()
@@ -148,6 +187,8 @@ def main():
     cam_matrix    = None
     last_x        = SCREEN_W / 2
     last_y        = SCREEN_H / 2
+    fil_x         = OneEuroFilter(mincutoff=0.35, beta=0.12)
+    fil_y         = OneEuroFilter(mincutoff=0.35, beta=0.12)
     sm_pitch = sm_yaw = sm_roll = None
     no_face_count = 0
 
@@ -167,6 +208,7 @@ def main():
             no_face_count += 1
             if no_face_count >= NO_FACE_RESET:
                 last_x, last_y = SCREEN_W / 2, SCREEN_H / 2
+                fil_x.reset(); fil_y.reset()
                 sm_pitch = sm_yaw = sm_roll = None
                 no_face_count = 0
             
@@ -235,14 +277,19 @@ def main():
             sy = last_y + (sy - last_y) * 0.3
         last_x, last_y = sx, sy
 
-        # Broadcast raw coordinate over Websocket
-        ws_server.broadcast_gaze(sx, sy)
+        # smooth only the DISPLAYED/BROADCASTED dot with a One Euro filter
+        now = time.time()
+        sx_smooth = fil_x(sx, now)
+        sy_smooth = fil_y(sy, now)
+
+        # Broadcast smoothed coordinate over Websocket
+        ws_server.broadcast_gaze(sx_smooth, sy_smooth)
 
         # Log raw gaze coordinate to sessions/live/gaze_log.jsonl
         gaze_logger.log(sx, sy)
 
-        # Draw visual feedback indicator on frame
-        cv2.putText(frame, f"Gaze: {int(sx)}, {int(sy)}", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        # Draw visual feedback indicator on frame (using smoothed coordinates)
+        cv2.putText(frame, f"Gaze: {int(sx_smooth)}, {int(sy_smooth)}", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         
         # Draw circles around irises for verification
         h_img, w_img, _ = frame.shape

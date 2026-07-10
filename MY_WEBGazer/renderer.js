@@ -652,7 +652,7 @@ function connectPosterGazeWS() {
   if (!isPosterTracking) return;
 
   console.log('[Electron Shell] Connecting to Gaze Python WS server...');
-  posterWS = new WebSocket("ws://localhost:8765");
+  posterWS = new WebSocket("ws://127.0.0.1:8765");
 
   posterWS.onopen = () => {
     console.log('[Electron Shell] Connected to gaze WS server.');

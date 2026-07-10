@@ -46,7 +46,7 @@ import pyautogui
 # =============================================================================
 
 class GazeWebSocketServer:
-    def __init__(self, host="localhost", port=8765):
+    def __init__(self, host="127.0.0.1", port=8765):
         self.host = host
         self.port = port
         self.connected = set()

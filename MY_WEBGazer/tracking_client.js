@@ -1026,7 +1026,7 @@
     if (!isTrackingActive) return;
     
     console.log('[InsightUX Guest] Connecting to Gaze Python WS server...');
-    ws = new WebSocket("ws://localhost:8765");
+    ws = new WebSocket("ws://127.0.0.1:8765");
 
     ws.onopen = () => {
       console.log('[InsightUX Guest] Connected to Gaze Python server.');
